@@ -106,7 +106,7 @@ install_packages() {
     apt-get install -y libio-socket-inet6-perl libsocket6-perl libcrypt-ssleay-perl \
         libnet-libidn-perl libio-socket-ssl-perl libwww-perl libpcre3 libpcre3-dev \
         zlib1g-dev dbus iftop zip unzip wget net-tools curl nano sed screen gnupg \
-        gnupg1 bc apt-transport-https build-essential dirmngr dnsutils sudo at htop \
+        gnupg1 bc apt-transport-https build-essential dirmngr dnsutils sudo at htop vnstat \
         iptables bsdmainutils cron lsof lnav || { log red "Failed to install toolkit packages."; exit 1; }
     
     # Install speedtest
