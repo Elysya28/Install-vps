@@ -15,5 +15,5 @@ Pastikan anda sudah login sebagai root sebelum menjalankan perintah dibawah
  apt-get update && apt-get upgrade -y && reboot
  ```
  ```html
- wget https://raw.githubusercontent.com/tabraklari/Install-vps/main/sibondt.sh && chmod +x sibondt.sh && ./sibondt.sh
+ wget https://raw.githubusercontent.com/tabraklari/Install-vps/main/vps.sh && chmod +x vps.sh && ./vps.sh
  ```
