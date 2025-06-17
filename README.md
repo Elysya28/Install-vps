@@ -1,6 +1,8 @@
-# Script ini di modifikasi oleh Sibondt
+# Script Marzban
 
-# Sistem VM yang dapat digunakan
+Ini adalah script Marzban yang telah di modifikasi oleh Sibondt. </br>
+
+# OS Support
 - Debian 11 </br>
 - Debian 12 </br>
 - Ubuntu 20.04 </br>
