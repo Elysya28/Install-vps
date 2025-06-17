@@ -5,9 +5,9 @@ Ini adalah script Marzban yang telah di modifikasi oleh Sibondt. </br>
 # OS Support
 - Debian 11 </br>
 - Debian 12 </br>
-- Ubuntu 20.04 </br>
-- Ubuntu 22.04 </br>
-- Ubuntu 24.04 </br>
+- Ubuntu 20.04 (LTS) </br>
+- Ubuntu 22.04 (LTS) </br>
+- Ubuntu 24.04 (LTS) </br>
 
 # Instalasi
 Pastikan anda sudah login sebagai root sebelum menjalankan perintah dibawah
