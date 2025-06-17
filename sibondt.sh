@@ -192,7 +192,7 @@ main() {
     
     # Install Marzban
     log blue "Installing Marzban..."
-    bash -c "$(curl -sL https://raw.githubusercontent.com/nationpwned/marzban/refs/heads/main/install)" @ install || { log red "Failed to install Marzban."; exit 1; }
+    bash -c "$(curl -sL https://raw.githubusercontent.com/tabraklari/Install-vps/refs/heads/main/install)" @ install || { log red "Failed to install Marzban."; exit 1; }
     
     # Install subscriptions and environment
     log blue "Configuring Marzban components..."
