@@ -1066,7 +1066,7 @@ EOF
  
     # Install WARP proxy
     log blue "Installing WARP proxy..."
-    wget -q -O /root/warp "https://raw.githubusercontent.com/tabraklari/Install-vps/main/warp_proxy.sh" && chmod +x /root/warp
+    wget -q -O /root/warp "https://raw.githubusercontent.com/hamid-gh98/x-ui-scripts/main/install_warp_proxy.sh" && chmod +x /root/warp
     bash /root/warp -y || { log red "Failed to install WARP proxy."; exit 1; }
     
     # Finalize Marzban setup
