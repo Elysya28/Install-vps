@@ -196,7 +196,7 @@ main() {
     
     # Install subscriptions and environment
     log blue "Configuring Marzban components..."
-    wget -q -N -P /var/lib/marzban/templates/subscription/ https://raw.githubusercontent.com/x0sina/marzban-sub/main/index.html || { log red "Failed to download subscription template."; exit 1; }
+    wget -q -N -P /var/lib/marzban/templates/subscription/ https://raw.githubusercontent.com/tabraklari/Install-vps/main/index.html || { log red "Failed to download subscription template."; exit 1; }
 
     # Create custom .env file
     cat > "$MARZBAN_DIR/.env" << 'EOF'
