@@ -1021,16 +1021,6 @@ EOF
         ],
         "routeOnly": true
       }
-    },
-    {
-      "tag": "SHADOWSOCKS_OUTLINE",
-      "listen": "0.0.0.0",
-      "port": 1080,
-      "protocol": "shadowsocks",
-      "settings": {
-        "clients": [],
-        "network": "tcp,udp"
-      }
     }
   ],
   "outbounds": [
