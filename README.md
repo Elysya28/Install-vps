@@ -2,6 +2,11 @@
 
 Ini adalah script Marzban yang telah di modifikasi oleh Sibondt. </br>
 
+# Thanks to
+- [Gozargah](https://github.com/Gozargah/Marzban)
+- [hamid-gh98](https://github.com/hamid-gh98)
+- [x0sina](https://github.com/x0sina/marzban-sub)
+
 # OS Support
 - Debian 12 </br>
 - Debian 11 </br>
