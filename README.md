@@ -1,5 +1,3 @@
-# Script Marzban
-
 # Instalasi
 Pastikan anda sudah login sebagai root sebelum menjalankan perintah dibawah
   ```html
