@@ -192,11 +192,11 @@ main() {
     
     # Install Marzban
     log blue "Installing Marzban..."
-    bash -c "$(curl -sL https://raw.githubusercontent.com/nationpwned/marzban/refs/heads/main/install)" @ install || { log red "Failed to install Marzban."; exit 1; }
+    bash -c "$(curl -sL https://raw.githubusercontent.com/Elysya28/Install-vps/main/install)" @ install
     
     # Install subscriptions and environment
     log blue "Configuring Marzban components..."
-    wget -q -N -P /var/lib/marzban/templates/subscription/ https://raw.githubusercontent.com/x0sina/marzban-sub/main/index.html || { log red "Failed to download subscription template."; exit 1; }
+    wget -q -N -P /var/lib/marzban/templates/subscription/ https://raw.githubusercontent.com/Elysya28/Install-vps/main/index.html
 
     # Create custom .env file
     cat > "$MARZBAN_DIR/.env" << 'EOF'
