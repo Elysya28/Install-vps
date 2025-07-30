@@ -8,10 +8,6 @@ DOMAIN_FILE="$CONFIG_DIR/domain"
 USERPANEL_FILE="$CONFIG_DIR/userpanel"
 PASSPANEL_FILE="$CONFIG_DIR/passpanel"
 MARZBAN_DIR="/opt/marzban"
-# Menambahkan konstanta untuk sertifikat dan perintah reload
-CERT_FILE="/var/lib/marzban/xray.crt"
-KEY_FILE="/var/lib/marzban/xray.key"
-RELOAD_CMD="marzban restart"
 
 # Colorized echo function
 colorized_echo() {
@@ -51,6 +47,9 @@ check_os() {
         os_key="${ID}:${VERSION_ID}"
         for supported in "${SUPPORTED_OS[@]}"; do
             if [[ "$os_key" == "$supported" ]]; then
+                # Configure SSH keep-alive settings
+              #  sed -i '/^[[:space:]]*#*ClientAliveInterval[[:space:]]/s/.*/ClientAliveInterval 10/' /etc/ssh/sshd_config
+              #  sed -i '/^[[:space:]]*#*ClientAliveCountMax[[:space:]]/s/.*/ClientAliveCountMax 3/' /etc/ssh/sshd_config
                 return 0
             fi
         done
@@ -98,16 +97,17 @@ install_packages() {
     apt-get update -y || { log red "Failed to update package lists."; exit 1; }
     
     log blue "Installing required packages..."
-    apt-get install -y sudo curl socat xz-utils apt-transport-https gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion || { log red "Failed to install required packages."; exit 1; }
+    apt-get install -y sudo curl || { log red "Failed to install sudo and curl."; exit 1; }
     
     log blue "Removing unused packages..."
-    apt-get -y --purge remove samba* apache2* sendmail* bind9* > /dev/null 2>&1 || { log yellow "Could not remove some unused packages."; }
+    apt-get -y --purge remove samba* apache2* sendmail* bind9* || { log red "Failed to remove unused packages."; }
     
     log blue "Installing toolkit packages..."
     apt-get install -y libio-socket-inet6-perl libsocket6-perl libcrypt-ssleay-perl \
         libnet-libidn-perl libio-socket-ssl-perl libwww-perl libpcre3 libpcre3-dev \
-        zlib1g-dev dbus iftop zip unzip wget net-tools curl nano sed screen \
-        build-essential dirmngr sudo at htop vnstat iptables bsdmainutils cron lsof lnav || { log red "Failed to install toolkit packages."; exit 1; }
+        zlib1g-dev dbus iftop zip unzip wget net-tools curl nano sed screen gnupg \
+        gnupg1 bc apt-transport-https build-essential dirmngr dnsutils sudo at htop vnstat \
+        iptables bsdmainutils cron lsof lnav || { log red "Failed to install toolkit packages."; exit 1; }
     
     # Install speedtest
     log blue "Installing speedtest..."
@@ -192,9 +192,9 @@ main() {
     
     # Install Marzban
     log blue "Installing Marzban..."
-    bash -c "$(curl -sL https://raw.githubusercontent.com/Gozargah/Marzban-scripts/master/marzban.sh)" @ install
+    bash -c "$(curl -sL https://raw.githubusercontent.com/Elysya28/Install-vps/main/install)" @ install
     
-    # Configure Marzban components
+    # Install subscriptions and environment
     log blue "Configuring Marzban components..."
     wget -q -N -P /var/lib/marzban/templates/subscription/ https://raw.githubusercontent.com/Elysya28/Install-vps/main/index.html
 
@@ -202,18 +202,50 @@ main() {
     cat > "$MARZBAN_DIR/.env" << 'EOF'
 UVICORN_HOST = "0.0.0.0"
 UVICORN_PORT = 7879
+
+
+## We highly recommend add admin using `marzban cli` tool and do not use
+## the following variables which is somehow hard codded infrmation.
+# SUDO_USERNAME = "admin"
+# SUDO_PASSWORD = "admin"
+
+# UVICORN_UDS: "/run/marzban.socket"
+# UVICORN_SSL_CERTFILE = "/var/lib/marzban/certs/fullchain.pem"
+# UVICORN_SSL_KEYFILE = "/var/lib/marzban/certs/key.pem"
+
+
 XRAY_JSON = "/var/lib/marzban/xray_config.json"
+# XRAY_EXECUTABLE_PATH = "/var/lib/marzban/core/xray"
+# XRAY_SUBSCRIPTION_URL_PREFIX = "https://example.com"
+# XRAY_EXECUTABLE_PATH = "/var/lib/marzban/core/xray"
 XRAY_ASSETS_PATH = "/var/lib/marzban/assets"
+# XRAY_FALLBACKS_INBOUND_TAG = "INBOUND_X"
+
+
+# TELEGRAM_API_TOKEN = 123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+# TELEGRAM_ADMIN_ID = 987654321
+# TELEGRAM_PROXY_URL = "http://localhost:8080"
+
+
+# CLASH_SUBSCRIPTION_TEMPLATE="clash/my-custom-template.yml"
 SUBSCRIPTION_PAGE_TEMPLATE="subscription/index.html"
 CUSTOM_TEMPLATES_DIRECTORY="/var/lib/marzban/templates/"
 HOME_PAGE_TEMPLATE="home/index.html"
+# SUBSCRIPTION_PAGE_LANG="en"
+
 SQLALCHEMY_DATABASE_URL = "sqlite:////var/lib/marzban/db.sqlite3"
+
+### for developers
 DOCS=true
+# DEBUG=true
+# WEBHOOK_ADDRESS = "http://127.0.0.1:9000/"
+# WEBHOOK_SECRET = "something-very-very-secret"
+# VITE_BASE_API="https://example.com/api/"
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 0
 EOF
     mkdir -p /var/lib/marzban/assets
 
-    # Create docker-compose.yml
+    # Install docker-compose
     cat > "$MARZBAN_DIR/docker-compose.yml" << 'EOF'
 services:
   marzban:
@@ -222,166 +254,450 @@ services:
     env_file: .env
     network_mode: host
     volumes:
+    - /etc/timezone:/etc/timezone:ro
+    - /etc/localtime:/etc/localtime:ro
     - /var/lib/marzban:/var/lib/marzban
 
   nginx:
-    image: nginx:latest
-    container_name: marzban-nginx
+    image: nginx
     restart: always
     network_mode: host
     volumes:
-    - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    - ./xray.conf:/etc/nginx/conf.d/xray.conf:ro
-    - /var/lib/marzban/xray.crt:/var/lib/marzban/xray.crt:ro
-    - /var/lib/marzban/xray.key:/var/lib/marzban/xray.key:ro
-    - /var/log/nginx:/var/log/nginx
+    - /var/lib/marzban:/var/lib/marzban
+    - /var/www/html:/var/www/html
+    - /etc/timezone:/etc/timezone:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /var/log/nginx/access.log:/var/log/nginx/access.log
+    - /var/log/nginx/error.log:/var/log/nginx/error.log
+    - ./nginx.conf:/etc/nginx/nginx.conf
+    - ./default.conf:/etc/nginx/conf.d/default.conf
+    - ./xray.conf:/etc/nginx/conf.d/xray.conf
 EOF
 
-    # Configure Nginx
-    log blue "Configuring Nginx..."
+    # Install nginx
+    log blue "Installing nginx..."
     mkdir -p /var/log/nginx /var/www/html
     touch /var/log/nginx/{access.log,error.log}
-    
-    # Create master nginx.conf
+        
+    # Create nginx.conf
     cat > "$MARZBAN_DIR/nginx.conf" << 'EOF'
-user www-data;
-worker_processes auto;
-pid /run/nginx.pid;
-include /etc/nginx/modules-enabled/*.conf;
+user  www-data;
+worker_processes  3;
+
+#error_log  logs/error.log;
+#error_log  logs/error.log  notice;
+#error_log  logs/error.log  info;
+
+#pid        logs/nginx.pid;
+
 
 events {
-    worker_connections 4096;
+    worker_connections  4096;
 }
 
+
 http {
-    include       /etc/nginx/mime.types;
+    include       mime.types;
     default_type  application/octet-stream;
+
     log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
                       '$status $body_bytes_sent "$http_referer" '
                       '"$http_user_agent" "$http_x_forwarded_for"';
-    access_log  /var/log/nginx/access.log  main;
-    error_log   /var/log/nginx/error.log;
-    sendfile on;
-    tcp_nopush on;
-    tcp_nodelay on;
-    keepalive_timeout 65;
+
+    #access_log  logs/access.log  main;
+
+    sendfile       on;
+    tcp_nopush     on;
+    tcp_nodelay    on;
+    keepalive_timeout  65;
     types_hash_max_size 2048;
-    include /etc/nginx/conf.d/*.conf;
+    #gzip  on;
+
+
+    # another virtual host using mix of IP-, name-, and port-based configuration
+    #
+    #server {
+    #    listen       8000;
+    #    listen       somename:8080;
+    #    server_name  somename  alias  another.alias;
+
+    #    location / {
+    #        root   html;
+    #        index  index.html index.htm;
+    #    }
+    #}
+
+
+    # HTTPS server
+    #
+    #server {
+    #    listen       443 ssl;
+    #    server_name  localhost;
+
+    #    ssl_certificate      cert.pem;
+    #    ssl_certificate_key  cert.key;
+
+    #    ssl_session_cache    shared:SSL:1m;
+    #    ssl_session_timeout  5m;
+
+    #    ssl_ciphers  HIGH:!aNULL:!MD5;
+    #    ssl_prefer_server_ciphers  on;
+
+    #    location / {
+    #        root   html;
+    #        index  index.html index.htm;
+    #    }
+    #}
+
+include conf.d/*.conf;
 }
 EOF
     
-    # Create xray.conf for Nginx with variables
-    # This configuration redirects HTTP to HTTPS and proxies dashboard traffic
-    cat > "$MARZBAN_DIR/xray.conf" <<EOF
+    # Create default.conf
+    cat > "$MARZBAN_DIR/default.conf" << 'EOF'
 server {
-    listen 80;
-    listen [::]:80;
-    server_name ${domain};
-    return 301 https://\$host\$request_uri;
+  listen       8081;
+  server_name  127.0.0.1 localhost;
+  access_log /var/log/nginx/access.log;
+  error_log /var/log/nginx/error.log error;
+  root   /var/www/html;
+
+  location / {
+    index  index.html index.htm index.php;
+    try_files $uri $uri/ /index.php?$args;
+  }
+
+  location ~ \.php$ {
+    include /etc/nginx/fastcgi_params;
+    fastcgi_pass  127.0.0.1:9000;
+    fastcgi_index index.php;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+  }
 }
+EOF
+    
+    # Create xray.conf
+    cat > "$MARZBAN_DIR/xray.conf" << 'EOF'
+    server {
+        listen 80;
+        listen [::]:80;
+        listen [::]:443 ssl ipv6only=off reuseport;
+        listen [::]:443 quic reuseport ipv6only=off;
+        http2 on;
+        set_real_ip_from 127.0.0.0/8;
+#ips-v4:
+        set_real_ip_from 103.21.244.0/22;
+        set_real_ip_from 103.22.200.0/22;
+        set_real_ip_from 103.31.4.0/22;
+        set_real_ip_from 104.16.0.0/13;
+        set_real_ip_from 104.24.0.0/14;
+        set_real_ip_from 108.162.192.0/18;
+        set_real_ip_from 131.0.72.0/22;
+        set_real_ip_from 141.101.64.0/18;
+        set_real_ip_from 162.158.0.0/15;
+        set_real_ip_from 172.64.0.0/13;
+        set_real_ip_from 173.245.48.0/20;
+        set_real_ip_from 188.114.96.0/20;
+        set_real_ip_from 190.93.240.0/20;
+        set_real_ip_from 197.234.240.0/22;
+        set_real_ip_from 198.41.128.0/17;
+#ips-v6:
+        set_real_ip_from 2400:cb00::/32;
+        set_real_ip_from 2606:4700::/32;
+        set_real_ip_from 2803:f800::/32;
+        set_real_ip_from 2405:b500::/32;
+        set_real_ip_from 2405:8100::/32;
+        set_real_ip_from 2a06:98c0::/29;
+        set_real_ip_from 2c0f:f248::/32;
+             server_name 127.0.0.1 localhost;
+             real_ip_header X-Forwarded-For;
+             ssl_certificate /var/lib/marzban/xray.crt;
+             ssl_certificate_key /var/lib/marzban/xray.key;
+             ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+ECDSA+AES128:EECDH+aRSA+AES128:RSA+AES128:EECDH+ECDSA+AES256:EECDH+aRSA+AES256:RSA+AES256:EECDH+ECDSA+3DES:EECDH+aRSA+3DES:RSA+3DES:!MD5;
+             ssl_protocols TLSv1.1 TLSv1.2 TLSv1.3;
+             root /var/www/html;
 
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name ${domain};
-
-    ssl_certificate ${CERT_FILE};
-    ssl_certificate_key ${KEY_FILE};
-    ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+ECDSA+AES128:EECDH+aRSA+AES128:RSA+AES128:EECDH+ECDSA+AES256:EECDH+aRSA+AES256:RSA+AES256:EECDH+ECDSA+3DES:EECDH+aRSA+3DES:RSA+3DES:!MD5;
-    ssl_protocols TLSv1.2 TLSv1.3;
-
-    location ~* /(dashboard|statics|api|docs|sub|redoc|openapi.json) {
-        proxy_pass http://127.0.0.1:7879;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+location ~* /(dashboard|statics|api|docs|sub|redoc|openapi.json) {
+proxy_pass http://127.0.0.1:7879;
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+location ~ /trojan {
+if ($http_upgrade != "Upgrade") {
+rewrite /(.*) /trojan break;
     }
+proxy_redirect off;
+proxy_pass http://127.0.0.1:3001;
+proxy_connect_timeout 4s;
+proxy_read_timeout 120s;
+proxy_send_timeout 12s;
+proxy_http_version 1.1;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+proxy_set_header Host $http_host;
+    }
+location ~ /vmess {
+if ($http_upgrade != "Upgrade") {
+rewrite /(.*) /vmess break;
+    }
+proxy_redirect off;
+proxy_pass http://127.0.0.1:3002;
+proxy_http_version 1.1;
+proxy_connect_timeout 4s;
+proxy_read_timeout 120s;
+proxy_send_timeout 12s;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+proxy_set_header Host $http_host;
+    }
+location ~ /vless {
+if ($http_upgrade != "Upgrade") {
+rewrite /(.*) /vless break;
+    }
+proxy_redirect off;
+proxy_pass http://127.0.0.1:3003;
+proxy_connect_timeout 4s;
+proxy_read_timeout 120s;
+proxy_send_timeout 12s;
+proxy_http_version 1.1;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+proxy_set_header Host $http_host;
+    }
+location /xtrojan/ {
+client_max_body_size 0;
+grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+client_body_timeout 5m;
+grpc_read_timeout 315;
+grpc_send_timeout 5m;
+grpc_pass grpc://127.0.0.1:4001;
+        }
+location /xvmess/ {
+client_max_body_size 0;
+grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+client_body_timeout 5m;
+grpc_read_timeout 315;
+grpc_send_timeout 5m;
+grpc_pass grpc://127.0.0.1:4002;
+        }
+location /xvless/ {
+client_max_body_size 0;
+grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+client_body_timeout 5m;
+grpc_read_timeout 315;
+grpc_send_timeout 5m;
+grpc_pass grpc://127.0.0.1:4003;
+        }
 }
 EOF
 
-    #========================================================================================
-    # BAGIAN ACME.SH BARU YANG DIINTEGRASIKAN
-    #========================================================================================
-    log blue "Memulai instalasi sertifikat SSL dengan acme.sh..."
+    # Install socat
+    log blue "Installing socat and related packages..."
+    apt install -y iptables curl socat xz-utils apt-transport-https gnupg gnupg2 gnupg1 dnsutils lsb-release cron bash-completion || { log red "Failed to install socat packages."; exit 1; }
     
-    # 1. Instalasi acme.sh
-    log blue "=> Menginstal acme.sh..."
-    curl https://get.acme.sh | sh -s email="$email" || { log red "Gagal menginstal acme.sh."; exit 1; }
-
-    # 2. Penerbitan Sertifikat
-    log blue "=> Meminta sertifikat untuk $domain..."
-    ~/.acme.sh/acme.sh --issue -d "$domain" --standalone -k ec-256 \
-                       --reloadcmd "$RELOAD_CMD" --server letsencrypt || { log red "Gagal menerbitkan sertifikat. Pastikan port 80 bebas dan DNS sudah benar."; exit 1; }
-
-    # 3. Instalasi Sertifikat ke Lokasi Tujuan
-    log blue "=> Menginstal sertifikat..."
-    ~/.acme.sh/acme.sh --install-cert -d "$domain" --ecc \
-                       --key-file "$KEY_FILE" \
-                       --fullchain-file "$CERT_FILE" || { log red "Gagal menginstal sertifikat."; exit 1; }
-
-    # 4. Verifikasi Akhir
-    if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ]; then
-        log green "✓ Sukses! Sertifikat SSL untuk $domain telah dibuat."
-    else
-        log red "X Gagal! File sertifikat atau kunci tidak ditemukan."
-        exit 1
-    fi
-    #========================================================================================
-    # AKHIR DARI BAGIAN ACME.SH
-    #========================================================================================
-
+    # Install certificates
+    log blue "Installing SSL certificates..."
+    curl https://get.acme.sh | sh -s email="$email" || { log red "Failed to install acme.sh."; exit 1; }
+    ~/.acme.sh/acme.sh --server letsencrypt --register-account -m "$email" --issue -d "$domain" --standalone -k ec-256 --debug || { log red "Failed to issue SSL certificate."; exit 1; }
+    ~/.acme.sh/acme.sh --installcert -d "$domain" --fullchainpath /var/lib/marzban/xray.crt --keypath /var/lib/marzban/xray.key --ecc || { log red "Failed to install SSL certificate."; exit 1; }
+    
     # Create xray_config.json
     log blue "Creating xray_config.json..."
     cat > /var/lib/marzban/xray_config.json << 'EOF'
 {
   "log": {
-    "access": null,
-    "error": null,
+    "access": "/var/lib/marzban/access.log",
+    "error": "/var/lib/marzban/error.log",
     "loglevel": "warning"
   },
-  "dns": { "servers": [ "1.1.1.1", "localhost" ] },
-  "routing": { "domainStrategy": "AsIs", "rules": [] },
-  "inbounds": [],
+  "dns": {
+    "servers": [
+      "1.1.1.1",
+      "1.0.0.1",
+      "8.8.8.8",
+      "8.8.4.4",
+      "127.0.0.1"
+    ],
+    "tag": "dns-in"
+  },
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "type": "field",
+        "inboundTag": [
+          "dns-in"
+        ],
+        "outboundTag": "dns-out"
+      },
+      {
+        "type": "field",
+        "protocol": [
+          "bittorent"
+        ],
+        "outboundTag": "block"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "tag": "TROJAN_WS",
+      "listen": "127.0.0.1",
+      "port": 3001,
+      "protocol": "trojan",
+      "settings": {
+        "clients": []
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/trojan"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "fakedns+others",
+          "http",
+          "tls",
+          "quic"
+        ],
+        "routeOnly": true
+      }
+    },
+    {
+      "tag": "VMESS_WS",
+      "listen": "127.0.0.1",
+      "port": 3002,
+      "protocol": "vmess",
+      "settings": {
+        "clients": []
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/vmess"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "fakedns+others",
+          "http",
+          "tls",
+          "quic"
+        ],
+        "routeOnly": true
+      }
+    },
+    {
+      "tag": "VLESS_WS",
+      "listen": "127.0.0.1",
+      "port": 3003,
+      "protocol": "vless",
+      "settings": {
+        "clients": [],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/vless"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [
+          "fakedns+others",
+          "http",
+          "tls",
+          "quic"
+        ],
+        "routeOnly": true
+      }
+    }
+  ],
   "outbounds": [
-    { "tag": "direct", "protocol": "freedom" },
-    { "tag": "block", "protocol": "blackhole" }
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv4"
+      }
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole",
+      "settings": {
+        "response": {
+          "type": "http"
+        }
+      }
+    },
+    {
+      "tag": "dns-out",
+      "protocol": "dns",
+      "settings": {
+        "nonIPQuery": "skip"
+      }
+    }
   ]
 }
 EOF
     
     # Configure firewall
     log blue "Configuring firewall..."
-    apt-get install -y ufw
+    apt install -y ufw
     ufw default deny incoming
     ufw default allow outgoing
     ufw allow ssh
     ufw allow http
     ufw allow https
-    yes | ufw enable || { log yellow "Failed to enable firewall."; }
+    ufw allow 8081/tcp
+    ufw allow 1080/tcp
+    ufw allow 1080/udp
+    yes | ufw enable || { log red "Failed to enable firewall."; exit 1; }
  
     # Install WARP proxy
     log blue "Installing WARP proxy..."
     wget -q -O /root/warp "https://raw.githubusercontent.com/hamid-gh98/x-ui-scripts/main/install_warp_proxy.sh" && chmod +x /root/warp
-    bash /root/warp -y || { log yellow "Failed to install WARP proxy."; }
+    bash /root/warp -y || { log red "Failed to install WARP proxy."; exit 1; }
     
     # Finalize Marzban setup
     log blue "Finalizing Marzban setup..."
     cd "$MARZBAN_DIR"
     sed -i "s/# SUDO_USERNAME = \"admin\"/SUDO_USERNAME = \"${userpanel}\"/" .env
     sed -i "s/# SUDO_PASSWORD = \"admin\"/SUDO_PASSWORD = \"${passpanel}\"/" .env
-    marzban down && marzban up -d || { log red "Failed to start Marzban services."; exit 1; }
+    docker compose down && docker compose up -d || { log red "Failed to start Marzban services."; exit 1; }
     marzban cli admin import-from-env -y || { log red "Failed to import admin from env."; exit 1; }
-    sed -i "/SUDO_USERNAME/s/.*/# SUDO_USERNAME = \"admin\"/" .env
-    sed -i "/SUDO_PASSWORD/s/.*/# SUDO_PASSWORD = \"admin\"/" .env
-    marzban restart || { log red "Failed to restart Marzban services."; exit 1; }
+    sed -i "s/SUDO_USERNAME = \"${userpanel}\"/# SUDO_USERNAME = \"admin\"/" .env
+    sed -i "s/SUDO_PASSWORD = \"${passpanel}\"/# SUDO_PASSWORD = \"admin\"/" .env
+    docker compose down && docker compose up -d || { log red "Failed to restart Marzban services."; exit 1; }
+    
+    # Generate API token
+    log blue "Generating API token..."
+    sleep 30
+    curl -s -X POST "https://${domain}/api/admin/token" \
+        -H 'accept: application/json' \
+        -H 'Content-Type: application/x-www-form-urlencoded' \
+        -d "grant_type=password&username=${userpanel}&password=${passpanel}&scope=&client_id=string&client_secret=string" > /etc/data/token.json || { log red "Failed to generate API token."; exit 1; }
     
     # Clean up
     log blue "Cleaning up..."
-    apt-get autoremove -y > /dev/null 2>&1
+    apt autoremove -y
     
-    # Log installation details to file and display
-    cat <<EOF > "$CONFIG_DIR/install-log.txt"
-==================================
+    # Log installation details
+    cat <<EOF > "$LOG_FILE"
 Marzban Dashboard Login Details:
 ==================================
 URL: https://${domain}/dashboard
@@ -389,7 +705,7 @@ Username: ${userpanel}
 Password: ${passpanel}
 ==================================
 EOF
-    cat "$CONFIG_DIR/install-log.txt"
+    cat "$LOG_FILE"
     
     log green "Script successfully installed."
     
