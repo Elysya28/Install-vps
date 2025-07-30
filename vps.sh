@@ -11,7 +11,7 @@ MARZBAN_DIR="/opt/marzban"
 # Menambahkan konstanta untuk sertifikat dan perintah reload
 CERT_FILE="/var/lib/marzban/xray.crt"
 KEY_FILE="/var/lib/marzban/xray.key"
-RELOAD_CMD="systemctl restart marzban-nginx && marzban restart"
+RELOAD_CMD="marzban restart"
 
 # Colorized echo function
 colorized_echo() {
