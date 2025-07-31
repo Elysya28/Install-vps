@@ -192,11 +192,11 @@ main() {
     
     # Install Marzban
     log blue "Installing Marzban..."
-    bash -c "$(curl -sL https://raw.githubusercontent.com/Elysya28/Install-vps/main/install)" @ install
+    bash -c "$(curl -sL https://raw.githubusercontent.com/Elysya28/Install-vps/coba/install)" @ install
     
     # Install subscriptions and environment
     log blue "Configuring Marzban components..."
-    wget -q -N -P /var/lib/marzban/templates/subscription/ https://raw.githubusercontent.com/Elysya28/Install-vps/main/index.html
+    wget -q -N -P /var/lib/marzban/templates/subscription/ https://raw.githubusercontent.com/Elysya28/Install-vps/coba/index.html
 
     # Create custom .env file
     cat > "$MARZBAN_DIR/.env" << 'EOF'
