@@ -192,7 +192,7 @@ main() {
     
     # Install Marzban
     log blue "Installing Marzban..."
-    bash -c "$(curl -sL https://raw.githubusercontent.com/Elysya28/Install-vps/main/install)" @ install
+    bash -c "$(curl -sL https://raw.githubusercontent.com/Elysya28/Install-vps/main/install)" @ install --pre-release
     
     # Install subscriptions and environment
     log blue "Configuring Marzban components..."
